@@ -2,9 +2,12 @@ from flask import Flask, render_template, request, jsonify, Response, session, r
 from automation import run_automation
 import json
 import secrets
+from datetime import timedelta
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(16)
+# ใช้คีย์คงที่เพื่อให้ Session ไม่หลุดเมื่อปิด/เปิดเซิร์ฟเวอร์ใหม่
+app.secret_key = "rtamed_automation_bot_secret_key"
+app.permanent_session_lifetime = timedelta(days=30)
 
 @app.route('/')
 def index():
@@ -18,6 +21,7 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         if username and password:
+            session.permanent = True  # ให้เบราว์เซอร์จำค่าไว้ตามที่ตั้งไว้ (30 วัน)
             session['username'] = username
             session['password'] = password
             return redirect(url_for('index'))

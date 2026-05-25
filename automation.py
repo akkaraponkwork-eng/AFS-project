@@ -1,5 +1,7 @@
 import random
 import time
+
+# pyrefly: ignore [missing-import]
 from playwright.sync_api import sync_playwright
 
 import json
@@ -55,6 +57,15 @@ def run_automation(username, password, temp_min, temp_max, start_row, end_row, t
             yield log("กำลังไปยังเมนู 'การคัดกรอง'...")
             page.get_by_text("การคัดกรอง").click()
             page.wait_for_timeout(2000)
+            
+            # พยายามปิดหน้าต่าง "แจ้งเตือน" ที่อาจเด้งขึ้นมาขวาง
+            try:
+                close_btn = page.locator(".toast-close-button, .close, button.close, .btn-close, [aria-label='Close'], :text-is('×'), :text-is('x')").first
+                if close_btn.is_visible(timeout=2000):
+                    close_btn.click()
+                    yield log("ปิดหน้าต่างแจ้งเตือนอัตโนมัติแล้ว")
+            except Exception:
+                pass
             
             processed = 0
             yield log(f"เริ่มดำเนินการตั้งแต่ลำดับที่ {start_row} ถึง {end_row}")

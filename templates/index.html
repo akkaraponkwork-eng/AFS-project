@@ -84,7 +84,7 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                         </div>
                     </div>
-                    <a href="/logout" class="icon-btn" style="text-decoration: none; margin-left: 8px; border-color: var(--danger); color: var(--danger);" title="Logout">
+                    <a href="/logout" id="logoutBtn" class="icon-btn" style="text-decoration: none; margin-left: 8px; border-color: var(--danger); color: var(--danger);" title="Logout">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
                     </a>
                 </div>
@@ -108,6 +108,15 @@
                     </div>
                     <h3 id="statusTitle">Ready to start</h3>
                     <p id="statusMessage" class="stat-desc">Waiting for your command.</p>
+                    <div id="progressContainer" class="hidden" style="margin-top: 15px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px;">
+                            <span>ความคืบหน้า</span>
+                            <span id="progressText">0%</span>
+                        </div>
+                        <div style="width: 100%; background: #334155; border-radius: 4px; height: 8px; overflow: hidden;">
+                            <div id="progressBar" style="width: 0%; height: 100%; background: #3b82f6; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="card stat-card">
@@ -135,46 +144,200 @@
                     </div>
                     
                     <form id="automationForm">
-                        <!-- Removed Username & Password fields as they are handled by login -->
-                        <div class="form-row">
-                            <div class="input-group">
-                                <label for="startRow">Start ID</label>
-                                <input type="number" id="startRow" name="startRow" value="1" min="1" required>
+                        <div class="tabs-header">
+                            <button type="button" class="tab-btn active" data-tab="tab-1">ช่วงที่ 1</button>
+                            <button type="button" class="tab-btn" data-tab="tab-2">ช่วงที่ 2</button>
+                            <button type="button" class="tab-btn" data-tab="tab-3">ช่วงที่ 3</button>
+                        </div>
+                        
+                        <!-- TAB 1 -->
+                        <div id="tab-1" class="tab-pane active">
+                            <div class="form-row">
+                                <label class="toggle-switch" style="margin-bottom: 10px;">
+                                    <input type="checkbox" id="enable1" checked>
+                                    <span class="slider"></span>
+                                    <span class="toggle-label" style="color: var(--success); font-weight: 500;">เปิดใช้งานช่วงที่ 1</span>
+                                </label>
                             </div>
-                            <div class="input-group">
-                                <label for="endRow">End ID</label>
-                                <input type="number" id="endRow" name="endRow" value="39" min="1" required>
+                            <div class="form-row">
+                                <div class="input-group">
+                                    <label for="startRow1">Start ID</label>
+                                    <input type="number" id="startRow1" value="1" min="1">
+                                </div>
+                                <div class="input-group">
+                                    <label for="endRow1">End ID</label>
+                                    <input type="number" id="endRow1" value="39" min="1">
+                                </div>
+                                <div class="input-group">
+                                    <label for="timePeriod1">Time</label>
+                                    <select id="timePeriod1">
+                                        <option value="morning">Morning 🌅</option>
+                                        <option value="afternoon">Afternoon ☀️</option>
+                                        <option value="night">Night 🌇</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="input-group">
-                                <label for="timePeriod">Time</label>
-                                <select id="timePeriod" name="timePeriod" required>
-                                    <option value="morning">Morning 🌅</option>
-                                    <option value="afternoon">Afternoon ☀️</option>
-                                    <option value="night">Night 🌇</option>
-                                </select>
+                            <div class="form-row">
+                                <div class="input-group">
+                                    <label for="tempMin1">Min Temp (°C)</label>
+                                    <input type="number" id="tempMin1" value="35.9" step="0.1">
+                                </div>
+                                <div class="input-group">
+                                    <label for="tempMax1">Max Temp (°C)</label>
+                                    <input type="number" id="tempMax1" value="36.1" step="0.1">
+                                </div>
+                                <div class="input-group">
+                                    <label for="uValue1">U Value</label>
+                                    <select id="uValue1">
+                                        <option value="skip">Skip</option>
+                                        <option value="0">0</option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                        <option value="random">Random (0-4)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row" style="margin-top: 15px;">
+                                <div class="input-group">
+                                    <label for="scheduleTime1">ตั้งเวลาเริ่ม (อัตโนมัติ)</label>
+                                    <input type="time" id="scheduleTime1">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB 2 -->
+                        <div id="tab-2" class="tab-pane">
+                            <div class="form-row">
+                                <label class="toggle-switch" style="margin-bottom: 10px;">
+                                    <input type="checkbox" id="enable2">
+                                    <span class="slider"></span>
+                                    <span class="toggle-label" style="color: var(--success); font-weight: 500;">เปิดใช้งานช่วงที่ 2</span>
+                                </label>
+                            </div>
+                            <div class="form-row">
+                                <div class="input-group">
+                                    <label for="startRow2">Start ID</label>
+                                    <input type="number" id="startRow2" value="1" min="1">
+                                </div>
+                                <div class="input-group">
+                                    <label for="endRow2">End ID</label>
+                                    <input type="number" id="endRow2" value="39" min="1">
+                                </div>
+                                <div class="input-group">
+                                    <label for="timePeriod2">Time</label>
+                                    <select id="timePeriod2">
+                                        <option value="morning">Morning 🌅</option>
+                                        <option value="afternoon" selected>Afternoon ☀️</option>
+                                        <option value="night">Night 🌇</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="input-group">
+                                    <label for="tempMin2">Min Temp (°C)</label>
+                                    <input type="number" id="tempMin2" value="35.9" step="0.1">
+                                </div>
+                                <div class="input-group">
+                                    <label for="tempMax2">Max Temp (°C)</label>
+                                    <input type="number" id="tempMax2" value="36.1" step="0.1">
+                                </div>
+                                <div class="input-group">
+                                    <label for="uValue2">U Value</label>
+                                    <select id="uValue2">
+                                        <option value="skip">Skip</option>
+                                        <option value="0">0</option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                        <option value="random">Random (0-4)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row" style="margin-top: 15px;">
+                                <div class="input-group">
+                                    <label for="scheduleTime2">ตั้งเวลาเริ่ม (อัตโนมัติ)</label>
+                                    <input type="time" id="scheduleTime2">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB 3 -->
+                        <div id="tab-3" class="tab-pane">
+                            <div class="form-row">
+                                <label class="toggle-switch" style="margin-bottom: 10px;">
+                                    <input type="checkbox" id="enable3">
+                                    <span class="slider"></span>
+                                    <span class="toggle-label" style="color: var(--success); font-weight: 500;">เปิดใช้งานช่วงที่ 3</span>
+                                </label>
+                            </div>
+                            <div class="form-row">
+                                <div class="input-group">
+                                    <label for="startRow3">Start ID</label>
+                                    <input type="number" id="startRow3" value="1" min="1">
+                                </div>
+                                <div class="input-group">
+                                    <label for="endRow3">End ID</label>
+                                    <input type="number" id="endRow3" value="39" min="1">
+                                </div>
+                                <div class="input-group">
+                                    <label for="timePeriod3">Time</label>
+                                    <select id="timePeriod3">
+                                        <option value="morning">Morning 🌅</option>
+                                        <option value="afternoon">Afternoon ☀️</option>
+                                        <option value="night" selected>Night 🌇</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="input-group">
+                                    <label for="tempMin3">Min Temp (°C)</label>
+                                    <input type="number" id="tempMin3" value="35.9" step="0.1">
+                                </div>
+                                <div class="input-group">
+                                    <label for="tempMax3">Max Temp (°C)</label>
+                                    <input type="number" id="tempMax3" value="36.1" step="0.1">
+                                </div>
+                                <div class="input-group">
+                                    <label for="uValue3">U Value</label>
+                                    <select id="uValue3">
+                                        <option value="skip">Skip</option>
+                                        <option value="0">0</option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                        <option value="random">Random (0-4)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row" style="margin-top: 15px;">
+                                <div class="input-group">
+                                    <label for="scheduleTime3">ตั้งเวลาเริ่ม (อัตโนมัติ)</label>
+                                    <input type="time" id="scheduleTime3">
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="form-row">
-                            <div class="input-group">
-                                <label for="tempMin">Min Temp (°C)</label>
-                                <input type="number" id="tempMin" name="tempMin" value="35.9" step="0.1" required>
+                        <!-- Global Controls -->
+                        <div class="global-controls" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--card-border);">
+                            <div class="form-row" style="margin-bottom: 15px;">
+                                <div class="input-group" style="width: 100%;">
+                                    <label for="typingSpeed">ความเร็วในการกรอก (Speed)</label>
+                                    <select id="typingSpeed" style="width: 100%; padding: 8px; border-radius: 6px; background: rgba(30, 41, 59, 0.5); color: white; border: 1px solid var(--card-border);">
+                                        <option value="slow">ช้า (Slow - ปลอดภัย)</option>
+                                        <option value="normal" selected>ปกติ (Normal)</option>
+                                        <option value="fast">เร็ว (Fast)</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="input-group">
-                                <label for="tempMax">Max Temp (°C)</label>
-                                <input type="number" id="tempMax" name="tempMax" value="36.1" step="0.1" required>
-                            </div>
-                            <div class="input-group">
-                                <label for="uValue">U Value</label>
-                                <select id="uValue" required>
-                                    <option value="skip">Skip</option>
-                                    <option value="0">0</option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                    <option value="4">4</option>
-                                    <option value="random">Random (0-4)</option>
-                                </select>
+                            <div class="form-row" style="margin-bottom: 0;">
+                                <div class="input-group" style="display: flex; flex-direction: row; gap: 8px;">
+                                    <button type="button" id="savePresetBtn" class="btn-secondary" style="flex: 1; padding: 10px; background: rgba(51, 65, 85, 0.5); color: white; border: 1px solid var(--card-border); border-radius: 6px; cursor: pointer; transition: all 0.2s;">💾 บันทึกค่าทั้งหมด</button>
+                                    <button type="button" id="loadPresetBtn" class="btn-secondary" style="flex: 1; padding: 10px; background: rgba(51, 65, 85, 0.5); color: white; border: 1px solid var(--card-border); border-radius: 6px; cursor: pointer; transition: all 0.2s;">📂 โหลดค่า</button>
+                                </div>
                             </div>
                         </div>
                         
@@ -189,6 +352,9 @@
                                 <button type="submit" id="submitBtn" class="btn-primary">
                                     <span class="btn-text">Start Automation</span>
                                     <div class="spinner hidden"></div>
+                                </button>
+                                <button type="button" id="pauseBtn" class="btn-warning hidden" style="background: #f59e0b; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-family: inherit; font-weight: 500;">
+                                    <span class="btn-text">Pause</span>
                                 </button>
                                 <button type="button" id="stopBtn" class="btn-danger hidden">
                                     <span class="btn-text">Stop</span>

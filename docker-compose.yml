@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  afs-bot:
+    build: .
+    container_name: afs-bot
+    restart: always
+    ports:
+      - "${PORT:-10000}:10000"
+    environment:
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+      - PUBLIC_URL=${PUBLIC_URL}
+      - PORT=10000
+      - TZ=Asia/Bangkok
+    volumes:
+      - ./app.py:/app/app.py
+      - ./automation.py:/app/automation.py
+      - ./templates:/app/templates
+      - ./static:/app/static
+      - ./data:/app/data

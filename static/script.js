@@ -48,53 +48,259 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     });
 });
 
-// --- Presets ---
-document.getElementById('savePresetBtn')?.addEventListener('click', () => {
-    const presets = [1, 2, 3].map(i => ({
+// --- Presets (JSON CRUD) ---
+let serverPresets = {};
+
+async function fetchPresets() {
+    try {
+        const res = await fetch('/api/presets');
+        const data = await res.json();
+        serverPresets = data.presets || {};
+        updatePresetDropdowns();
+    } catch (err) {
+        console.error('Failed to fetch presets', err);
+    }
+}
+
+async function fetchActiveState() {
+    try {
+        const res = await fetch('/api/active_state');
+        const data = await res.json();
+        if (data.tabs) {
+            data.tabs.forEach((tab, idx) => {
+                const i = idx + 1;
+                const enableEl = document.getElementById('enable' + i);
+                if (enableEl) enableEl.checked = tab.enabled ?? (i === 1);
+                
+                const fields = ['startRow', 'endRow', 'tempMin', 'tempMax', 'timePeriod', 'uValue', 'scheduleTime'];
+                fields.forEach(f => {
+                    const el = document.getElementById(f + i);
+                    if (el && tab[f] !== undefined && tab[f] !== null) {
+                        el.value = tab[f];
+                    }
+                });
+            });
+            const sbEl = document.getElementById('showBrowser');
+            if (sbEl) sbEl.checked = data.showBrowser ?? false;
+            
+            const tsEl = document.getElementById('typingSpeed');
+            if (tsEl && data.typingSpeed) {
+                tsEl.value = data.typingSpeed;
+            }
+        } else {
+            // Fallback: If no active state saved yet, try loading 'Default' preset if it exists
+            if (serverPresets && serverPresets["Default"]) {
+                for (let i = 1; i <= 3; i++) {
+                    loadPresetToTab(i, "Default");
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Failed to fetch active state', err);
+    }
+}
+
+function updatePresetDropdowns() {
+    for (let i = 1; i <= 3; i++) {
+        const selector = document.getElementById('presetSelector' + i);
+        if (!selector) continue;
+        
+        const currentValue = selector.value;
+        selector.innerHTML = '<option value="">-- เลือกโปรไฟล์ --</option>';
+        
+        Object.keys(serverPresets).forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            selector.appendChild(opt);
+        });
+        
+        if (serverPresets[currentValue]) {
+            selector.value = currentValue;
+        }
+    }
+}
+
+function loadPresetToTab(tabIndex, presetName) {
+    const preset = serverPresets[presetName];
+    if (!preset) return;
+    
+    // Support loading old format presets (which contained a 'tabs' array)
+    const isOldFormat = preset.tabs !== undefined && Array.isArray(preset.tabs);
+    const sourceData = isOldFormat ? preset.tabs[tabIndex - 1] : preset;
+    
+    if (!sourceData) return;
+    
+    const fields = ['startRow', 'endRow', 'tempMin', 'tempMax', 'timePeriod', 'uValue', 'scheduleTime'];
+    fields.forEach(f => {
+        const el = document.getElementById(f + tabIndex);
+        if (el && sourceData[f] !== undefined && sourceData[f] !== null) {
+            el.value = sourceData[f];
+        }
+    });
+}
+
+function getTabValues(tabIndex) {
+    return {
+        startRow: document.getElementById('startRow' + tabIndex).value,
+        endRow: document.getElementById('endRow' + tabIndex).value,
+        tempMin: document.getElementById('tempMin' + tabIndex).value,
+        tempMax: document.getElementById('tempMax' + tabIndex).value,
+        timePeriod: document.getElementById('timePeriod' + tabIndex).value,
+        uValue: document.getElementById('uValue' + tabIndex).value,
+        scheduleTime: document.getElementById('scheduleTime' + tabIndex).value
+    };
+}
+
+function getFormValues() {
+    const tabs = [1, 2, 3].map(i => ({
         enabled: document.getElementById('enable' + i).checked,
-        startRow: document.getElementById('startRow' + i).value,
-        endRow: document.getElementById('endRow' + i).value,
-        tempMin: document.getElementById('tempMin' + i).value,
-        tempMax: document.getElementById('tempMax' + i).value,
-        timePeriod: document.getElementById('timePeriod' + i).value,
-        uValue: document.getElementById('uValue' + i).value,
-        scheduleTime: document.getElementById('scheduleTime' + i).value
+        ...getTabValues(i)
     }));
-    const globalPreset = {
-        tabs: presets,
+    return {
+        tabs: tabs,
         showBrowser: document.getElementById('showBrowser').checked,
         typingSpeed: document.getElementById('typingSpeed').value
     };
-    localStorage.setItem('afs_preset_v2', JSON.stringify(globalPreset));
-    alert('บันทึกการตั้งค่าทั้งหมดเรียบร้อยแล้ว');
+}
+
+async function saveTabPreset(tabIndex, presetName) {
+    const presetData = getTabValues(tabIndex);
+    try {
+        const res = await fetch('/api/presets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ preset_name: presetName, preset_data: presetData })
+        });
+        const data = await res.json();
+        
+        if(data.success) {
+            await fetchPresets();
+            alert(data.message);
+            document.getElementById('presetSelector' + tabIndex).value = presetName;
+        } else {
+            alert('เกิดข้อผิดพลาด: ' + data.message);
+        }
+    } catch (err) {
+        alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+        console.error(err);
+    }
+}
+
+async function saveActiveState() {
+    const stateData = getFormValues();
+    try {
+        const res = await fetch('/api/active_state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(stateData)
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert(data.message);
+        } else {
+            alert('เกิดข้อผิดพลาด: ' + data.message);
+        }
+    } catch (err) {
+        alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+        console.error(err);
+    }
+}
+
+// Add event listeners for per-tab preset controls
+for (let i = 1; i <= 3; i++) {
+    document.getElementById('loadPresetBtn' + i)?.addEventListener('click', () => {
+        const presetName = document.getElementById('presetSelector' + i).value;
+        if (presetName) {
+            loadPresetToTab(i, presetName);
+        } else {
+            alert("กรุณาเลือกโปรไฟล์ที่ต้องการโหลด");
+        }
+    });
+
+    document.getElementById('savePresetBtn' + i)?.addEventListener('click', () => {
+        const newName = prompt(`ตั้งชื่อโปรไฟล์สำหรับช่วงที่ ${i}:`);
+        if (newName && newName.trim()) {
+            saveTabPreset(i, newName.trim());
+        }
+    });
+
+    document.getElementById('deletePresetBtn' + i)?.addEventListener('click', async () => {
+        const selector = document.getElementById('presetSelector' + i);
+        const currentName = selector.value;
+        if (!currentName) {
+            alert("กรุณาเลือกโปรไฟล์ที่ต้องการลบ");
+            return;
+        }
+        
+        if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบโปรไฟล์ '${currentName}'?`)) {
+            try {
+                const res = await fetch(`/api/presets/${currentName}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.message);
+                    await fetchPresets();
+                } else {
+                    alert('เกิดข้อผิดพลาด: ' + data.message);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    });
+}
+
+document.getElementById('saveActiveStateBtn')?.addEventListener('click', () => {
+    saveActiveState();
 });
 
-document.getElementById('loadPresetBtn')?.addEventListener('click', () => {
-    const data = localStorage.getItem('afs_preset_v2');
-    if(data) {
-        const globalPreset = JSON.parse(data);
-        if (globalPreset.tabs) {
-            globalPreset.tabs.forEach((preset, idx) => {
-                const i = idx + 1;
-                document.getElementById('enable' + i).checked = preset.enabled ?? (i === 1);
-                document.getElementById('startRow' + i).value = preset.startRow || 1;
-                document.getElementById('endRow' + i).value = preset.endRow || 39;
-                document.getElementById('tempMin' + i).value = preset.tempMin || 35.9;
-                document.getElementById('tempMax' + i).value = preset.tempMax || 36.1;
-                document.getElementById('timePeriod' + i).value = preset.timePeriod || 'morning';
-                document.getElementById('uValue' + i).value = preset.uValue || 'skip';
-                document.getElementById('scheduleTime' + i).value = preset.scheduleTime || '';
-            });
-        }
-        document.getElementById('showBrowser').checked = globalPreset.showBrowser ?? true;
-        if (globalPreset.typingSpeed) {
-            document.getElementById('typingSpeed').value = globalPreset.typingSpeed;
-        }
-        alert('โหลดการตั้งค่าทั้งหมดเรียบร้อยแล้ว');
-    } else {
-        alert('ไม่พบการตั้งค่าที่บันทึกไว้');
-    }
+window.addEventListener('DOMContentLoaded', async () => {
+    await fetchPresets();
+    await fetchActiveState();
+    pollBackgroundLogs(); // Start polling immediately on load
 });
+
+// --- Background Logs Polling ---
+let lastBgLogIndex = 0;
+async function pollBackgroundLogs() {
+    try {
+        const res = await fetch(`/api/bg_logs?since=${lastBgLogIndex}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        if (data.logs && data.logs.length > 0) {
+            const logContainer = document.getElementById('logContainer');
+            if (logContainer) {
+                data.logs.forEach(log => {
+                    const logEntry = document.createElement('div');
+                    logEntry.style.marginBottom = '4px';
+                    
+                    if (log.type === 'error') logEntry.style.color = '#ef4444';
+                    else if (log.type === 'success') logEntry.style.color = '#10b981';
+                    else if (log.type === 'warning') logEntry.style.color = '#eab308';
+                    else logEntry.style.color = '#e2e8f0'; // Default text color
+                    
+                    // Add timestamp if available
+                    const timeStr = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    logEntry.textContent = `[${timeStr}] > ${log.message}`;
+                    
+                    logContainer.appendChild(logEntry);
+                });
+                // Keep only last 200 logs to prevent memory issues
+                while (logContainer.children.length > 200) {
+                    logContainer.removeChild(logContainer.firstChild);
+                }
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+            lastBgLogIndex = data.next_index;
+        }
+    } catch (e) {
+        // Silent error for background polling
+    }
+}
+
+// Poll every 2 seconds
+setInterval(pollBackgroundLogs, 2000);
 
 let scheduleTimers = [];
 let taskQueue = [];
@@ -157,7 +363,7 @@ function runNextTask() {
     currentEventSource = new EventSource(url);
     
     function resetButtons() {
-        if (taskQueue.length === 0 && pendingSchedules.length === 0) {
+        if (taskQueue.length === 0) {
             stopBtn.classList.add('hidden');
             if(pauseBtn) pauseBtn.classList.add('hidden');
             submitBtn.classList.remove('hidden');
@@ -165,19 +371,6 @@ function runNextTask() {
             btnText.textContent = 'Start Automation';
             spinner.classList.add('hidden');
             if (pulseDot) pulseDot.classList.add('hidden');
-        } else {
-            // If there are still schedules waiting but queue is empty
-            if (taskQueue.length === 0) {
-                statusTitle.textContent = 'รอกำหนดเวลาถัดไป...';
-                statusTitle.style.color = '#eab308';
-                statusMessage.textContent = `มีงานรอทำงานอีก ${pendingSchedules.length} งาน`;
-                if (pulseDot) pulseDot.classList.remove('hidden');
-                submitBtn.classList.add('hidden');
-                stopBtn.classList.remove('hidden');
-                stopBtn.disabled = false;
-                stopBtn.querySelector('.btn-text').textContent = 'Cancel Schedules';
-                if(pauseBtn) pauseBtn.classList.add('hidden');
-            }
         }
     }
     
@@ -212,7 +405,7 @@ function runNextTask() {
                 isRunning = false;
                 
                 if (data.type === 'success') {
-                    if (taskQueue.length === 0 && pendingSchedules.length === 0) {
+                    if (taskQueue.length === 0) {
                         successIcon.classList.remove('hidden');
                         statusTitle.textContent = 'เสร็จสิ้นทั้งหมด!';
                         statusTitle.style.color = '#10b981';
@@ -220,7 +413,7 @@ function runNextTask() {
                     }
                     playBeep(false);
                 } else {
-                    if (taskQueue.length === 0 && pendingSchedules.length === 0) {
+                    if (taskQueue.length === 0) {
                         errorIcon.classList.remove('hidden');
                         statusTitle.textContent = 'เกิดข้อผิดพลาด';
                         statusTitle.style.color = '#ef4444';
@@ -242,7 +435,7 @@ function runNextTask() {
         currentEventSource.close();
         isRunning = false;
         
-        if (taskQueue.length === 0 && pendingSchedules.length === 0) {
+        if (taskQueue.length === 0) {
             errorIcon.classList.remove('hidden');
             statusTitle.textContent = 'ขาดการเชื่อมต่อ';
             statusTitle.style.color = '#ef4444';
@@ -276,44 +469,26 @@ document.getElementById('automationForm').addEventListener('submit', function(e)
     taskQueue = [];
     
     const showBrowser = document.getElementById('showBrowser').checked;
-    let anyScheduled = false;
     let anyImmediate = false;
-    let scheduledTimes = [];
     
-    for(let i = 1; i <= 3; i++) {
-        if(document.getElementById('enable' + i).checked) {
-            const task = {
-                label: 'ช่วงที่ ' + i,
-                startRow: document.getElementById('startRow' + i).value,
-                endRow: document.getElementById('endRow' + i).value,
-                tempMin: document.getElementById('tempMin' + i).value,
-                tempMax: document.getElementById('tempMax' + i).value,
-                timePeriod: document.getElementById('timePeriod' + i).value,
-                uValue: document.getElementById('uValue' + i).value,
-                showBrowser: showBrowser,
-                speed: document.getElementById('typingSpeed').value
-            };
-            
-            const scheduleTime = document.getElementById('scheduleTime' + i).value;
-            if(scheduleTime) {
-                pendingSchedules.push({
-                    task: task,
-                    targetMs: calculateTargetMs(scheduleTime),
-                    scheduleTime: scheduleTime
-                });
-                anyScheduled = true;
-                scheduledTimes.push(scheduleTime);
-            } else {
-                taskQueue.push(task);
-                anyImmediate = true;
-            }
-        }
-    }
+    const activeTabBtn = document.querySelector('.tab-btn.active');
+    const activeTabId = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'tab-1';
+    const i = parseInt(activeTabId.split('-')[1]);
     
-    if (!anyScheduled && !anyImmediate) {
-        alert("กรุณาเปิดใช้งานอย่างน้อย 1 ช่วงเวลา");
-        return;
-    }
+    const task = {
+        label: 'ช่วงที่ ' + i,
+        startRow: document.getElementById('startRow' + i).value,
+        endRow: document.getElementById('endRow' + i).value,
+        tempMin: document.getElementById('tempMin' + i).value,
+        tempMax: document.getElementById('tempMax' + i).value,
+        timePeriod: document.getElementById('timePeriod' + i).value,
+        uValue: document.getElementById('uValue' + i).value,
+        showBrowser: showBrowser,
+        speed: document.getElementById('typingSpeed').value
+    };
+    
+    taskQueue.push(task);
+    anyImmediate = true;
     
     const submitBtn = document.getElementById('submitBtn');
     const stopBtn = document.getElementById('stopBtn');
@@ -322,51 +497,7 @@ document.getElementById('automationForm').addEventListener('submit', function(e)
     const statusMessage = document.getElementById('statusMessage');
     const pulseDot = document.querySelector('.pulse-dot');
     
-    if (anyScheduled) {
-        masterTimer = setInterval(() => {
-            const nowMs = Date.now();
-            let tasksToRun = [];
-            
-            pendingSchedules = pendingSchedules.filter(s => {
-                if (nowMs >= s.targetMs) {
-                    tasksToRun.push(s.task);
-                    return false; // remove
-                }
-                return true; // keep
-            });
-            
-            if (tasksToRun.length > 0) {
-                tasksToRun.forEach(t => taskQueue.push(t));
-                runNextTask();
-            }
-            
-            // UI Update for countdown if waiting
-            if (pendingSchedules.length > 0 && taskQueue.length === 0 && !isRunning) {
-                const nearest = [...pendingSchedules].sort((a,b) => a.targetMs - b.targetMs)[0];
-                const diffSecs = Math.floor((nearest.targetMs - nowMs) / 1000);
-                const h = Math.floor(diffSecs / 3600);
-                const m = Math.floor((diffSecs % 3600) / 60);
-                const s = diffSecs % 60;
-                const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-                statusMessage.textContent = `คิวถัดไป (${nearest.task.label}) เริ่มในอีก ${timeStr}`;
-            }
-        }, 1000);
-    }
-    
-    if (anyScheduled && !anyImmediate) {
-        statusBox.classList.remove('hidden');
-        statusTitle.textContent = 'กำลังรอเวลา...';
-        statusTitle.style.color = '#eab308';
-        statusMessage.textContent = `ระบบจะทำงานเวลา: ${scheduledTimes.join(', ')}`;
-        if (pulseDot) pulseDot.classList.remove('hidden');
-        
-        submitBtn.classList.add('hidden');
-        stopBtn.classList.remove('hidden');
-        stopBtn.disabled = false;
-        stopBtn.querySelector('.btn-text').textContent = 'Cancel Schedules';
-    } else {
-        runNextTask();
-    }
+    runNextTask();
 });
 
 document.getElementById('stopBtn').addEventListener('click', function() {
@@ -422,3 +553,63 @@ if (pauseBtn) {
 document.getElementById('logoutBtn')?.addEventListener('click', function() {
     localStorage.clear();
 });
+
+// =============================================
+// --- Background Log Polling ---
+// Polls /api/bg_logs every 3 seconds and shows
+// any logs from the background scheduler in terminal
+// =============================================
+let bgLogIndex = 0;
+
+function appendBgLog(logData) {
+    const logContainer = document.getElementById('logContainer');
+    if (!logContainer) return;
+    const logEntry = document.createElement('div');
+    logEntry.style.marginBottom = '4px';
+    if (logData.type === 'error') logEntry.style.color = '#ef4444';
+    else if (logData.type === 'success') logEntry.style.color = '#10b981';
+    else if (logData.type === 'warning') logEntry.style.color = '#eab308';
+    else logEntry.style.color = '#a78bfa';  // purple for background tasks
+    logEntry.textContent = `[AUTO] ${logData.message}`;
+    logContainer.appendChild(logEntry);
+    logContainer.scrollTop = logContainer.scrollHeight;
+}
+
+function pollBgLogs() {
+    fetch('/api/bg_logs?since=' + bgLogIndex)
+        .then(res => res.json())
+        .then(data => {
+            if (data.logs && data.logs.length > 0) {
+                bgLogIndex = data.next_index;
+                data.logs.forEach(entry => appendBgLog(entry));
+                
+                // Update status box if a background job just started/ended
+                const lastLog = data.logs[data.logs.length - 1];
+                if (lastLog) {
+                    const statusTitle = document.getElementById('statusTitle');
+                    const statusMessage = document.getElementById('statusMessage');
+                    const statusBox = document.getElementById('statusBox');
+                    if (lastLog.type === 'success' && !isRunning) {
+                        statusBox.classList.remove('hidden');
+                        statusTitle.textContent = '✅ Auto เสร็จสิ้น';
+                        statusTitle.style.color = '#10b981';
+                        statusMessage.textContent = lastLog.message;
+                    } else if (lastLog.type === 'error' && !isRunning) {
+                        statusBox.classList.remove('hidden');
+                        statusTitle.textContent = '❌ Auto เกิดข้อผิดพลาด';
+                        statusTitle.style.color = '#ef4444';
+                        statusMessage.textContent = lastLog.message;
+                    } else if (!isRunning && lastLog.bg_task_start) {
+                        statusBox.classList.remove('hidden');
+                        statusTitle.textContent = '⚙️ กำลังรันอัตโนมัติเบื้องหลัง...';
+                        statusTitle.style.color = '#a78bfa';
+                        statusMessage.textContent = lastLog.message;
+                    }
+                }
+            }
+        })
+        .catch(() => {}); // Silently ignore polling errors
+}
+
+// Start polling every 3 seconds
+setInterval(pollBgLogs, 3000);

@@ -1,6 +1,5 @@
-const CACHE_NAME = 'auto-fill-cache-v1';
+const CACHE_NAME = 'auto-fill-cache-v2';
 const urlsToCache = [
-  '/',
   '/static/style.css',
   '/static/script.js',
   '/static/manifest.json',
@@ -16,11 +15,27 @@ self.addEventListener('install', event => {
         return cache.addAll(urlsToCache);
       })
   );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+  self.clients.claim();
 });
 
 self.addEventListener('fetch', event => {
-  // We don't cache the API POST requests
-  if (event.request.method !== 'GET') {
+  // Only cache GET requests for static assets
+  if (event.request.method !== 'GET' || event.request.mode === 'navigate') {
     return;
   }
   

@@ -1,0 +1,22 @@
+# Environments
+.env
+venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Data (dynamic state, presets, etc.)
+data/
+debug_row.html
+
+# Tools / IDE
+.sixth/
+.vscode/
+.idea/
+.DS_Store
+
+# OS generated files
+Thumbs.db

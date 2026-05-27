@@ -1,5 +1,4 @@
-# Environments
-.env
+# Environment
 venv/
 
 # Python

@@ -8,7 +8,7 @@ echo 1. Checking Python Installation...
 python --version >nul 2>&1
 IF %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Python is not installed or not added to PATH.
-    echo Please install Python 3.9+ from python.org and check "Add to PATH".
+    echo Please install Python 3.8.10+ from python.org and check "Add to PATH".
     pause
     exit /b
 )

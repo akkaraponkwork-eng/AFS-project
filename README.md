@@ -12,7 +12,7 @@
 - **Smart Click:** ค้นหาช่อง U และ T ในตาราง พร้อมคลิกตัวเลขทศนิยมที่ซับซ้อนใน Popup ได้อย่างแม่นยำ
 
 ## 📋 ข้อกำหนดเบื้องต้น (Prerequisites)
-- [Python 3.10](https://www.python.org/downloads/) หรือใหม่กว่า (แนะนำให้ติ๊กถูกที่ `Add Python to PATH` ตอนติดตั้งด้วย)
+- [Python 3.8.10](https://www.python.org/downloads/) หรือใหม่กว่า (แนะนำให้ติ๊กถูกที่ `Add Python to PATH` ตอนติดตั้งด้วย)
 - ระบบปฏิบัติการ Windows (เนื่องจากมีไฟล์ `.bat` สำหรับเริ่มต้นระบบอย่างรวดเร็ว)
 
 ## 🛠️ วิธีการติดตั้งและใช้งาน (Installation & Usage)

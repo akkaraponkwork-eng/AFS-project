@@ -1,5 +1,5 @@
 # ใช้ Official Image ของ Playwright (ครอบคลุม Dependencies ทั้งหมดของ Chromium อัตโนมัติ)
-FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
+FROM mcr.microsoft.com/playwright/python:v1.40.0-focal
 
 # ตั้ง Timezone เป็นไทย (UTC+7) แบบ non-interactive
 ENV DEBIAN_FRONTEND=noninteractive

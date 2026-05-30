@@ -257,56 +257,45 @@ document.getElementById('saveActiveStateBtn')?.addEventListener('click', () => {
 window.addEventListener('DOMContentLoaded', async () => {
     await fetchPresets();
     await fetchActiveState();
-    pollBackgroundLogs(); // Start polling immediately on load
+    pollBackgroundLogs();
+    // บันทึก password ใน Redis เพื่อให้ scheduler ใช้ได้
+    fetch('/api/save_session_password', { method: 'POST' }).catch(() => {});
 });
 
 // --- Background Logs Polling ---
 let lastBgLogIndex = 0;
-async function pollBackgroundLogs() {
-    try {
-        const res = await fetch(`/api/bg_logs?since=${lastBgLogIndex}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        
-        if (data.logs && data.logs.length > 0) {
-            const logContainer = document.getElementById('logContainer');
-            if (logContainer) {
-                data.logs.forEach(log => {
-                    const logEntry = document.createElement('div');
-                    logEntry.style.marginBottom = '4px';
-                    
-                    if (log.type === 'error') logEntry.style.color = '#ef4444';
-                    else if (log.type === 'success') logEntry.style.color = '#10b981';
-                    else if (log.type === 'warning') logEntry.style.color = '#eab308';
-                    else logEntry.style.color = '#e2e8f0'; // Default text color
-                    
-                    // Add timestamp if available
-                    const timeStr = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                    logEntry.textContent = `[${timeStr}] > ${log.message}`;
-                    
-                    logContainer.appendChild(logEntry);
-                });
-                // Keep only last 200 logs to prevent memory issues
-                while (logContainer.children.length > 200) {
-                    logContainer.removeChild(logContainer.firstChild);
-                }
-                logContainer.scrollTop = logContainer.scrollHeight;
-            }
-            lastBgLogIndex = data.next_index;
-        }
-    } catch (e) {
-        // Silent error for background polling
+
+function appendBgLog(log) {
+    const logContainer = document.getElementById('logContainer');
+    if (!logContainer) return;
+    
+    const logEntry = document.createElement('div');
+    logEntry.style.marginBottom = '4px';
+    
+    if (log.type === 'error') logEntry.style.color = '#ef4444';
+    else if (log.type === 'success') logEntry.style.color = '#10b981';
+    else if (log.type === 'warning') logEntry.style.color = '#eab308';
+    else logEntry.style.color = '#e2e8f0'; 
+    
+    const timeStr = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    logEntry.textContent = `[${timeStr}] > ${log.message}`;
+    
+    logContainer.appendChild(logEntry);
+    
+    while (logContainer.children.length > 200) {
+        logContainer.removeChild(logContainer.firstChild);
     }
+    logContainer.scrollTop = logContainer.scrollHeight;
 }
 
-// Poll every 2 seconds
-setInterval(pollBackgroundLogs, 2000);
+// (Removed duplicate function)
 
 let scheduleTimers = [];
 let taskQueue = [];
 let isRunning = false;
 let isPaused = false;
 let currentEventSource = null;
+let currentTaskId = null;  // เก็บ task_id ของ task ที่กำลังรัน
 
 function runNextTask() {
     if (isRunning || taskQueue.length === 0) return;
@@ -324,8 +313,8 @@ function runNextTask() {
     const statusBox = document.getElementById('statusBox');
     const statusTitle = document.getElementById('statusTitle');
     const statusMessage = document.getElementById('statusMessage');
-    const successIcon = document.querySelector('.success-icon');
-    const errorIcon = document.querySelector('.error-icon');
+    const statusBadge = document.getElementById('statusBadge');
+    const badgeText = document.getElementById('badgeText');
     const pulseDot = document.querySelector('.pulse-dot');
     const logContainer = document.getElementById('logContainer');
     const progressContainer = document.getElementById('progressContainer');
@@ -339,13 +328,14 @@ function runNextTask() {
         pauseBtn.disabled = false;
         pauseBtn.querySelector('.btn-text').textContent = 'Pause';
         pauseBtn.style.background = '#f59e0b';
+        pauseBtn.style.color = '#ffffff';
     }
     stopBtn.disabled = false;
     stopBtn.querySelector('.btn-text').textContent = 'Stop';
     
     statusBox.classList.remove('hidden');
-    successIcon.classList.add('hidden');
-    errorIcon.classList.add('hidden');
+    statusBadge.className = 'status-badge running';
+    badgeText.textContent = 'Running';
     if (pulseDot) pulseDot.classList.remove('hidden');
     
     if(progressContainer) progressContainer.classList.remove('hidden');
@@ -359,9 +349,37 @@ function runNextTask() {
     statusMessage.textContent = 'คิวงานถัดไป: ' + taskQueue.length;
     statusTitle.style.color = '#3b82f6';
     
-    const url = `/api/start?startRow=${task.startRow}&endRow=${task.endRow}&tempMin=${task.tempMin}&tempMax=${task.tempMax}&timePeriod=${task.timePeriod}&showBrowser=${task.showBrowser}&uValue=${task.uValue}&speed=${task.speed}`;
-    currentEventSource = new EventSource(url);
-    
+    // POST ไปยัง /api/start ก่อน เพื่อรับ task_id
+    fetch('/api/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            startRow: task.startRow,
+            endRow: task.endRow,
+            tempMin: task.tempMin,
+            tempMax: task.tempMax,
+            timePeriod: task.timePeriod,
+            showBrowser: task.showBrowser,
+            uValue: task.uValue,
+            speed: task.speed,
+            label: task.label
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (!data.task_id) {
+            throw new Error(data.message || 'ไม่ได้รับ task_id');
+        }
+        currentTaskId = data.task_id;
+        currentEventSource = new EventSource(`/api/stream/${currentTaskId}`);
+        _attachSSEHandlers(currentEventSource);
+    })
+    .catch(err => {
+        console.error('Start error', err);
+        isRunning = false;
+        resetButtons();
+    });
+
     function resetButtons() {
         if (taskQueue.length === 0) {
             stopBtn.classList.add('hidden');
@@ -374,77 +392,95 @@ function runNextTask() {
         }
     }
     
-    currentEventSource.onmessage = function(event) {
-        try {
-            const data = JSON.parse(event.data);
-            
-            if (data.type === 'progress') {
-                if(data.total > 0 && progressBar && progressText) {
-                    const pct = Math.round((data.current / data.total) * 100);
-                    progressBar.style.width = pct + '%';
-                    progressText.textContent = pct + '%';
-                }
-                if (!data.message) return;
-            }
-            
-            if (data.message) {
-                const logEntry = document.createElement('div');
-                logEntry.style.marginBottom = '4px';
+    function _attachSSEHandlers(evtSource) {
+        evtSource.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
                 
-                if (data.type === 'error') logEntry.style.color = '#ef4444';
-                else if (data.type === 'success') logEntry.style.color = '#10b981';
-                else if (data.type === 'warning') logEntry.style.color = '#eab308';
-                
-                logEntry.textContent = `> ${data.message}`;
-                logContainer.appendChild(logEntry);
-                logContainer.scrollTop = logContainer.scrollHeight;
-            }
-            
-            if (data.type === 'success' || data.type === 'error') {
-                currentEventSource.close();
-                isRunning = false;
-                
-                if (data.type === 'success') {
-                    if (taskQueue.length === 0) {
-                        successIcon.classList.remove('hidden');
-                        statusTitle.textContent = 'เสร็จสิ้นทั้งหมด!';
-                        statusTitle.style.color = '#10b981';
-                        statusMessage.textContent = 'กระบวนการทำงานจบลงแล้ว';
-                    }
-                    playBeep(false);
-                } else {
-                    if (taskQueue.length === 0) {
-                        errorIcon.classList.remove('hidden');
-                        statusTitle.textContent = 'เกิดข้อผิดพลาด';
-                        statusTitle.style.color = '#ef4444';
-                        statusMessage.textContent = 'ระบบหยุดทำงาน';
-                    }
-                    playBeep(true);
+                if (data.type === 'done') {
+                    evtSource.close();
+                    return;
                 }
                 
-                resetButtons();
-                runNextTask(); // Run next in queue if any
+                if (data.type === 'progress') {
+                    if(data.total > 0 && progressBar && progressText) {
+                        const pct = Math.round((data.current / data.total) * 100);
+                        progressBar.style.width = pct + '%';
+                        progressText.textContent = pct + '%';
+                    }
+                    if (!data.message) return;
+                }
+                
+                if (data.message) {
+                    const logEntry = document.createElement('div');
+                    logEntry.style.marginBottom = '4px';
+                    
+                    if (data.type === 'error') logEntry.style.color = '#ef4444';
+                    else if (data.type === 'success') logEntry.style.color = '#10b981';
+                    else if (data.type === 'warning') logEntry.style.color = '#eab308';
+                    
+                    logEntry.textContent = `> ${data.message}`;
+                    logContainer.appendChild(logEntry);
+                    logContainer.scrollTop = logContainer.scrollHeight;
+                }
+                
+                if (data.type === 'success' || data.type === 'error') {
+                    evtSource.close();
+                    isRunning = false;
+                    currentTaskId = null;
+                    
+                    if (data.type === 'success') {
+                        if (taskQueue.length === 0) {
+                            const statusBadge = document.getElementById('statusBadge');
+                            const badgeText = document.getElementById('badgeText');
+                            if(statusBadge) statusBadge.className = 'status-badge success';
+                            if(badgeText) badgeText.textContent = 'Success';
+                            statusTitle.textContent = 'เสร็จสิ้นทั้งหมด!';
+                            statusTitle.style.color = 'var(--success)';
+                            statusMessage.textContent = 'กระบวนการทำงานจบลงแล้ว';
+                        }
+                        playBeep(false);
+                    } else {
+                        if (taskQueue.length === 0) {
+                            const statusBadge = document.getElementById('statusBadge');
+                            const badgeText = document.getElementById('badgeText');
+                            if(statusBadge) statusBadge.className = 'status-badge error';
+                            if(badgeText) badgeText.textContent = 'Error';
+                            statusTitle.textContent = 'เกิดข้อผิดพลาด';
+                            statusTitle.style.color = 'var(--danger)';
+                            statusMessage.textContent = 'ระบบหยุดทำงาน';
+                        }
+                        playBeep(true);
+                    }
+                    
+                    resetButtons();
+                    runNextTask();
+                }
+            } catch (e) {
+                console.error('Error parsing SSE data', e);
             }
-        } catch (e) {
-            console.error('Error parsing SSE data', e);
-        }
-    };
-    
-    currentEventSource.onerror = function(err) {
-        console.error('SSE Error', err);
-        currentEventSource.close();
-        isRunning = false;
+        };
         
-        if (taskQueue.length === 0) {
-            errorIcon.classList.remove('hidden');
-            statusTitle.textContent = 'ขาดการเชื่อมต่อ';
-            statusTitle.style.color = '#ef4444';
-            statusMessage.textContent = 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้';
-        }
-        resetButtons();
-        playBeep(true);
-        runNextTask();
-    };
+        evtSource.onerror = function(err) {
+            console.error('SSE Error', err);
+            evtSource.close();
+            isRunning = false;
+            currentTaskId = null;
+            
+            if (taskQueue.length === 0) {
+                const statusBadge = document.getElementById('statusBadge');
+                const badgeText = document.getElementById('badgeText');
+                if(statusBadge) statusBadge.className = 'status-badge error';
+                if(badgeText) badgeText.textContent = 'Disconnected';
+                statusTitle.textContent = 'ขาดการเชื่อมต่อ';
+                statusTitle.style.color = 'var(--danger)';
+                statusMessage.textContent = 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้';
+            }
+            resetButtons();
+            playBeep(true);
+            runNextTask();
+        };
+    }
 }
 
 let pendingSchedules = [];
@@ -511,8 +547,8 @@ document.getElementById('stopBtn').addEventListener('click', function() {
     pendingSchedules = [];
     taskQueue = [];
     
-    if (isRunning && currentEventSource) {
-        fetch('/api/stop', { method: 'POST' });
+    if (isRunning && currentTaskId) {
+        fetch(`/api/stop/${currentTaskId}`, { method: 'POST' });
     } else {
         // If it was just waiting, restore UI immediately
         const submitBtn = document.getElementById('submitBtn');
@@ -524,9 +560,11 @@ document.getElementById('stopBtn').addEventListener('click', function() {
         submitBtn.classList.remove('hidden');
         submitBtn.disabled = false;
         statusTitle.textContent = 'ยกเลิกการทำงาน/รอเวลาแล้ว';
-        statusTitle.style.color = '#ef4444';
+        statusTitle.style.color = 'var(--danger)';
         statusMessage.textContent = 'รอคำสั่งใหม่';
         if (pulseDot) pulseDot.classList.add('hidden');
+        if (statusBadge) statusBadge.className = 'status-badge';
+        if (badgeText) badgeText.textContent = 'Ready';
     }
 });
 
@@ -537,14 +575,24 @@ if (pauseBtn) {
             isPaused = false;
             this.querySelector('.btn-text').textContent = 'Pause';
             this.style.background = '#f59e0b';
+            this.style.color = '#ffffff';
             document.getElementById('statusTitle').textContent = 'กำลังทำงาน';
-            fetch('/api/resume', { method: 'POST' });
+            const statusBadge = document.getElementById('statusBadge');
+            const badgeText = document.getElementById('badgeText');
+            if(statusBadge) statusBadge.className = 'status-badge running';
+            if(badgeText) badgeText.textContent = 'Running';
+            if (currentTaskId) fetch(`/api/resume/${currentTaskId}`, { method: 'POST' });
         } else {
             isPaused = true;
             this.querySelector('.btn-text').textContent = 'Resume';
-            this.style.background = '#10b981';
+            this.style.background = 'var(--success)';
+            this.style.color = '#ffffff';
             document.getElementById('statusTitle').textContent = 'หยุดชั่วคราว';
-            fetch('/api/pause', { method: 'POST' });
+            const statusBadge = document.getElementById('statusBadge');
+            const badgeText = document.getElementById('badgeText');
+            if(statusBadge) statusBadge.className = 'status-badge paused';
+            if(badgeText) badgeText.textContent = 'Paused';
+            if (currentTaskId) fetch(`/api/pause/${currentTaskId}`, { method: 'POST' });
         }
     });
 }
@@ -562,6 +610,21 @@ document.getElementById('logoutBtn')?.addEventListener('click', function() {
 let bgLogIndex = 0;
 
 function appendBgLog(logData) {
+    if (logData.type === 'progress') {
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const statusBox = document.getElementById('statusBox');
+        if (logData.total > 0 && progressBar && progressText) {
+            if(statusBox) statusBox.classList.remove('hidden');
+            if(progressContainer) progressContainer.classList.remove('hidden');
+            const pct = Math.round((logData.current / logData.total) * 100);
+            progressBar.style.width = pct + '%';
+            progressText.textContent = pct + '%';
+        }
+        if (!logData.message) return;
+    }
+
     const logContainer = document.getElementById('logContainer');
     if (!logContainer) return;
     const logEntry = document.createElement('div');
@@ -589,21 +652,29 @@ function pollBgLogs() {
                     const statusTitle = document.getElementById('statusTitle');
                     const statusMessage = document.getElementById('statusMessage');
                     const statusBox = document.getElementById('statusBox');
+                    const statusBadge = document.getElementById('statusBadge');
+                    const badgeText = document.getElementById('badgeText');
                     if (lastLog.type === 'success' && !isRunning) {
                         statusBox.classList.remove('hidden');
                         statusTitle.textContent = '✅ Auto เสร็จสิ้น';
-                        statusTitle.style.color = '#10b981';
+                        statusTitle.style.color = 'var(--success)';
                         statusMessage.textContent = lastLog.message;
+                        if(statusBadge) statusBadge.className = 'status-badge success';
+                        if(badgeText) badgeText.textContent = 'Success';
                     } else if (lastLog.type === 'error' && !isRunning) {
                         statusBox.classList.remove('hidden');
                         statusTitle.textContent = '❌ Auto เกิดข้อผิดพลาด';
-                        statusTitle.style.color = '#ef4444';
+                        statusTitle.style.color = 'var(--danger)';
                         statusMessage.textContent = lastLog.message;
+                        if(statusBadge) statusBadge.className = 'status-badge error';
+                        if(badgeText) badgeText.textContent = 'Error';
                     } else if (!isRunning && lastLog.bg_task_start) {
                         statusBox.classList.remove('hidden');
                         statusTitle.textContent = '⚙️ กำลังรันอัตโนมัติเบื้องหลัง...';
                         statusTitle.style.color = '#a78bfa';
                         statusMessage.textContent = lastLog.message;
+                        if(statusBadge) statusBadge.className = 'status-badge running';
+                        if(badgeText) badgeText.textContent = 'Auto';
                     }
                 }
             }

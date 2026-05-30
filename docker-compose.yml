@@ -1,6 +1,15 @@
 version: '3.8'
 
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: afs-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
   afs-bot:
     build: .
     container_name: afs-bot
@@ -13,9 +22,27 @@ services:
       - PUBLIC_URL=${PUBLIC_URL}
       - PORT=10000
       - TZ=Asia/Bangkok
+      - REDIS_URL=redis://redis:6379/0
+      - RENDER=true
+    depends_on:
+      - redis
     volumes:
-      - ./app.py:/app/app.py
-      - ./automation.py:/app/automation.py
-      - ./templates:/app/templates
-      - ./static:/app/static
       - ./data:/app/data
+
+  afs-worker:
+    build: .
+    container_name: afs-worker
+    restart: always
+    command: celery -A celery_app worker --pool=threads --concurrency=10 --loglevel=info
+    environment:
+      - TZ=Asia/Bangkok
+      - REDIS_URL=redis://redis:6379/0
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - RENDER=true
+    depends_on:
+      - redis
+    volumes:
+      - ./data:/app/data
+
+volumes:
+  redis_data:

@@ -18,9 +18,9 @@ PORT = os.environ.get("PORT", "10000")
 def main():
     print("Starting AFS System Wrapper...")
     
-    # 1. Start Gunicorn Web Server
-    print(f"Starting Gunicorn on port {PORT}...")
-    gunicorn_cmd = ["gunicorn", "-w", "1", "-b", f"0.0.0.0:{PORT}", "--timeout", "300", "app:app"]
+    # 1. Start Gunicorn Web Server (4 workers สำหรับรองรับ multi-user)
+    print(f"Starting Gunicorn on port {PORT} (4 workers)...")
+    gunicorn_cmd = ["gunicorn", "-w", "4", "-b", f"0.0.0.0:{PORT}", "--timeout", "300", "app:app"]
     web_process = subprocess.Popen(gunicorn_cmd)
     
     # Wait for the web server to be ready

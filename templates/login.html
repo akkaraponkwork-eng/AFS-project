@@ -1,117 +1,64 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#0b0e14">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="manifest" href="/static/manifest.json">
-    <link rel="apple-touch-icon" href="/static/icon-192.png">
-    <title>AFS Login</title>
-    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/service-worker.js');
-        });
-      }
-    </script>
-    <style>
-        .login-layout {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .login-card {
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
-        }
-        .login-logo {
-            margin-bottom: 24px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 12px;
-        }
-        .login-logo .logo-icon {
-            width: 64px;
-            height: 64px;
-            border-radius: 16px;
-        }
-        .login-logo .logo-icon svg {
-            width: 32px;
-            height: 32px;
-        }
-        .login-logo h1 {
-            font-size: 1.75rem;
-            letter-spacing: 2px;
-        }
-        .login-logo p {
-            color: var(--text-muted);
-            font-size: 0.9rem;
-        }
-        .error-message {
-            color: var(--danger);
-            background: rgba(239, 68, 68, 0.1);
-            padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 0.9rem;
-            border: 1px solid rgba(239, 68, 68, 0.2);
-        }
-        .login-form {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            text-align: left;
-        }
-        .login-form button {
-            margin-top: 10px;
-            padding: 12px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0d0f1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="AFS Automation System — Login">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <title>AFS — เข้าสู่ระบบ</title>
+  <link rel="stylesheet" href="/static/style.css?v=3">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js'));
+    }
+  </script>
 </head>
 <body>
-    <div class="glow-bg"></div>
-    <div class="glow-bg-2"></div>
+  <div class="glow-bg"></div>
 
-    <div class="login-layout">
-        <div class="card login-card">
-            <div class="login-logo">
-                <div class="logo-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
-                    </svg>
-                </div>
-                <h1>AFS SYSTEM</h1>
-                <p>Automation Framework</p>
-            </div>
-
-            {% if error %}
-            <div class="error-message">
-                {{ error }}
-            </div>
-            {% endif %}
-
-            <form class="login-form" method="POST" action="/login">
-                <div class="input-group">
-                    <label for="username">Username</label>
-                    <input type="text" id="username" name="username" required placeholder="Enter your username" autocomplete="username">
-                </div>
-                <div class="input-group">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" name="password" required placeholder="Enter your password" autocomplete="current-password">
-                </div>
-                <button type="submit" class="btn-primary">
-                    Login
-                </button>
-            </form>
+  <div class="login-page">
+    <div class="login-box">
+      <!-- Brand -->
+      <div class="login-brand">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
         </div>
+        <h1>AFS SYSTEM</h1>
+        <p>Automation Framework</p>
+      </div>
+
+      {% if error %}
+      <div class="error-msg">{{ error }}</div>
+      {% endif %}
+
+      <form class="login-form" method="POST" action="/login">
+        <div class="input-group">
+          <label for="username">ชื่อผู้ใช้ (Username)</label>
+          <input type="text" id="username" name="username" required
+            placeholder="username" autocomplete="username">
+        </div>
+        <div class="input-group">
+          <label for="password">รหัสผ่าน (Password)</label>
+          <input type="password" id="password" name="password" required
+            placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+            <polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
+          </svg>
+          เข้าสู่ระบบ
+        </button>
+      </form>
+
+      <p class="login-hint"></p>
     </div>
+  </div>
 </body>
 </html>

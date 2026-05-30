@@ -11,9 +11,34 @@ def log(msg, type="info", **kwargs):
     data.update(kwargs)
     return json.dumps(data) + "\n"
 
+def _is_stopped(state):
+    """ตรวจสอบ stop flag จากทั้ง dict และ Redis key (ถ้ามี)"""
+    if state.get("should_stop"):
+        return True
+    r = state.get("_redis")
+    k = state.get("_stop_key")
+    if r and k and r.exists(k):
+        state["should_stop"] = True
+        return True
+    return False
+
+def _is_paused(state):
+    """ตรวจสอบ pause flag จากทั้ง dict และ Redis key (ถ้ามี)"""
+    r = state.get("_redis")
+    k = state.get("_pause_key")
+    if r and k:
+        return bool(r.exists(k))
+    return state.get("paused", False)
+
 def run_automation(username, password, temp_min, temp_max, start_row, end_row, time_period, show_browser=True, u_value='skip', speed='normal', state=None):
     if state is None:
         state = {"should_stop": False, "paused": False}
+        
+    import asyncio
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
         
     if speed == 'slow':
         wait_short = 600
@@ -46,7 +71,7 @@ def run_automation(username, password, temp_min, temp_max, start_row, end_row, t
             page.goto("https://rtamed.rta.mi.th:8443/login")
             page.wait_for_selector('input')
             
-            if state.get("should_stop"): return
+            if _is_stopped(state): return
                 
             inputs = page.locator('input').all()
             if len(inputs) >= 2:
@@ -61,7 +86,7 @@ def run_automation(username, password, temp_min, temp_max, start_row, end_row, t
             page.locator('button').click()
             page.wait_for_timeout(3000)
             
-            if state.get("should_stop"): return
+            if _is_stopped(state): return
                 
             # === Navigation ===
             yield log("กำลังไปยังเมนู 'การคัดกรอง'...")
@@ -85,16 +110,16 @@ def run_automation(username, password, temp_min, temp_max, start_row, end_row, t
             target_row = start_row
             
             while target_row <= end_row:
-                if state.get("should_stop"):
+                if _is_stopped(state):
                     yield log("ยกเลิกการทำงาน", "warning")
                     break
                     
-                while state.get("paused"):
-                    if state.get("should_stop"):
+                while _is_paused(state):
+                    if _is_stopped(state):
                         break
                     time.sleep(1)
                 
-                if state.get("should_stop"):
+                if _is_stopped(state):
                     break
                     
                 rows = page.locator('tbody tr').all()
@@ -105,12 +130,12 @@ def run_automation(username, password, temp_min, temp_max, start_row, end_row, t
                 found_on_page = False
                 
                 for row_idx, row in enumerate(rows):
-                    if target_row > end_row or state.get("should_stop"):
+                    if target_row > end_row or _is_stopped(state):
                         break
                         
-                    while state.get("paused"):
+                    while _is_paused(state):
                         time.sleep(1)
-                        if state.get("should_stop"): break
+                        if _is_stopped(state): break
                         
                     try:
                         first_col_text = row.locator('td').first.inner_text().strip()
@@ -146,7 +171,7 @@ def run_automation(username, password, temp_min, temp_max, start_row, end_row, t
                             # === T Value ===
                             next_row = page.locator('tbody tr').nth(row_idx + 1)
                             target_td = next_row.locator('td').nth(time_offset)
-                            target_td.click()
+                            target_td.click(timeout=10000, force=True)
                             
                             popup = page.locator("ngb-popover-window, .popover").last
                             popup.wait_for(state="visible", timeout=5000)
@@ -157,16 +182,17 @@ def run_automation(username, password, temp_min, temp_max, start_row, end_row, t
                             if popup.is_visible():
                                 decimal_part = int(round((target_temp - int(target_temp)) * 10))
                                 if decimal_part == 0:
-                                    popup.get_by_text(str(int(target_temp)), exact=True).click(timeout=2000)
+                                    popup.get_by_text(str(int(target_temp)), exact=True).click(timeout=5000)
                                 else:
-                                    popup.get_by_text(f".{decimal_part}", exact=True).click(timeout=2000)
+                                    popup.get_by_text(f".{decimal_part}", exact=True).click(timeout=5000)
+                            
+                            processed += 1
+                            yield log(f"[{processed}] กรอกอุณหภูมิ {target_temp} สำหรับลำดับที่ {row_num} เรียบร้อย", type="progress", current=processed, total=total_to_process)
+                            page.wait_for_timeout(wait_med)
                                     
                         except Exception as e:
-                            yield log(f"เกิดข้อผิดพลาดในการคลิกอุณหภูมิลำดับที่ {row_num}: {str(e)}", "warning")
-                        
-                        processed += 1
-                        yield log(f"[{processed}] กรอกอุณหภูมิ {target_temp} สำหรับลำดับที่ {row_num} เรียบร้อย", type="progress", current=processed, total=total_to_process)
-                        page.wait_for_timeout(wait_med)
+                            yield log(f"เกิดข้อผิดพลาดในลำดับที่ {row_num}: {str(e).splitlines()[0]}", "warning")
+                            page.wait_for_timeout(wait_med)
                         
                         target_row += 1
                         found_on_page = True

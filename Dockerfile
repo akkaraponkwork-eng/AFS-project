@@ -27,5 +27,5 @@ COPY . .
 # เปิด Port 10000 (Render มักจะใช้ Port นี้)
 EXPOSE 10000
 
-# สั่งรัน Entrypoint Wrapper สำหรับจัดการ Web Server + Cloudflared
+# CMD สำหรับ web service — ใช้ entrypoint.py เพื่อรัน Gunicorn + Cloudflare Tunnel + Discord Notification
 CMD ["python", "-u", "entrypoint.py"]

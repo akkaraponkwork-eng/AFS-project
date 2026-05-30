@@ -50,13 +50,16 @@ def notify_startup(url):
     ]
     return send_discord_notification("🚀 AFS System Started!", "บอทสำหรับกรอกข้อมูลอุณหภูมิอัตโนมัติพร้อมใช้งานแล้ว", 6516977, fields)
 
-def notify_job_result(label, success, message):
+def notify_job_result(label, success, message, username=None):
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     title = f"✅ ทำงานเสร็จสิ้น ({label})" if success else f"❌ เกิดข้อผิดพลาด ({label})"
     color = 1082400 if success else 15548997  # Green or Red
     
     fields = [
-        {"name": "รายละเอียด", "value": message, "inline": False},
-        {"name": "เวลา", "value": current_time, "inline": True}
+        {"name": "รายละเอียด", "value": message or "-", "inline": False},
+        {"name": "เวลา", "value": current_time, "inline": True},
     ]
+    if username:
+        fields.append({"name": "👤 ผู้ใช้งาน", "value": username, "inline": True})
+
     return send_discord_notification(title, "รายงานการทำงานอัตโนมัติ (Background)", color, fields)
